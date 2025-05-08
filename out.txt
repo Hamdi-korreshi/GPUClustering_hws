@@ -1,0 +1,7 @@
+pid=0: num_procs=4 n=64 my_work=16
+Data received.
+Data received.
+Data received.
+Sent data to other workers.
+Test: PASSED
+Total time 0: 0.000347 seconds.

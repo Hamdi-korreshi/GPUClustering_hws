@@ -1,0 +1,5 @@
+temptemplate.c
+*.tgz
+*.o
+mm
+dot_prod
