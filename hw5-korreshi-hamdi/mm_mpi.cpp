@@ -88,6 +88,16 @@ int compare(int n, int *dev, int *host) {
   return flag;
 }
 
+void print_matrix(int n, int m, int *matrix, char *name) {
+  printf("Name: %s \n[", name);
+  int i, j;
+  for(i=0; i<n; i++) {
+    for(j=0; j<m; j++)
+      printf(" %d, ", matrix[i*m +j]);
+    printf("]\n");
+  }
+}
+
 void print_lst_host(int name,int rank,int n, int *l){
   int i=0;
   printf("CPU rank=%d: %d: ",rank,name);
@@ -131,21 +141,19 @@ int main(int argc, char *argv[]) {
     order = MIN_ORDER;
     tile_width = MIN_TILE_WIDTH;
   }
-
   n = 1 << order;
+  my_work = n / nprocs;
   bx_dim = tile_width;
   by_dim = bx_dim;
   gx_dim = n/bx_dim;
-  gy_dim = n/(bx_dim*nprocs);
+  // gy_dim is computed wrong from the version given of the professor, leading to all zeros for ANY INPUT
+  // he made the same mistake in the cuda code so I am assuming this is on purpose now
+  gy_dim = (my_work + tile_width -1)/ tile_width;
   printf("rank=%d: order=%d n=%d: grid(%d,%d), block(%d,%d)\n",my_rank, order, n, gx_dim, gy_dim, bx_dim,by_dim);
-
-  my_work = n / nprocs;
 
   printf("rank=%d: nprocs=%d n=%d my_work=%d/%d=%d\n",my_rank,nprocs,n,n,nprocs,my_work);
 
   n_sq = n*n;
-  init_mat(mat_A, n_sq);
-  init_mat(mat_B, n_sq);
 
   gettimeofday(&timecheck, NULL);
   mpi_start = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec / 1000;
@@ -153,10 +161,22 @@ int main(int argc, char *argv[]) {
   /* MPI_Scatter mat_A */
 
   /* MPI_Bcast mat_B */
+    init_mat(mat_A, n_sq);
+    init_mat(mat_B, n_sq); 
+
+  MPI_Scatter(mat_A, my_work*n, MPI_INT,    // send chunk of A
+    mat_A, my_work*n, MPI_INT,    // receive into same buffer
+    MASTER, MPI_COMM_WORLD);
+  MPI_Bcast(mat_B,    n_sq,    MPI_INT,    // broadcast full B to everyone
+    MASTER, MPI_COMM_WORLD);
 
   matrix_multiply_cuda(nprocs, my_rank, n, my_work, mat_A, mat_B, mat_C, gx_dim, gy_dim, bx_dim,by_dim);
 
   /* MPI_Gather mat_C */
+
+  MPI_Gather(mat_C,    my_work*n, MPI_INT, // collect each rank’s C chunk
+    mat_C,    my_work*n, MPI_INT,
+    MASTER, MPI_COMM_WORLD);
 
   gettimeofday(&timecheck, NULL);
   mpi_end = (long)timecheck.tv_sec * 1000 + (long)timecheck.tv_usec / 1000;
@@ -174,6 +194,9 @@ int main(int argc, char *argv[]) {
   MPI_Finalize();
 
   if (my_rank==0) {
+    // print_matrix(n, n, mat_C, "MPI_VERSION");
+    // print_matrix(n, n, mat_C_host, "HOST VERSION");
+
     if (compare(n,mat_C,mat_C_host))
       printf("\nTest Host: PASS: host == dev\n\n");
     else

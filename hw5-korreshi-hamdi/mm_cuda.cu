@@ -80,7 +80,6 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
   /* Fill this func */
   __shared__ int a_shared[MAX_TILE_WIDTH][MAX_TILE_WIDTH];
   __shared__ int b_shared[MAX_TILE_WIDTH][MAX_TILE_WIDTH];
-
   int row = blockIdx.y * tile_width + threadIdx.y;
   int col = blockIdx.x * tile_width + threadIdx.x;
   int temp = 0;
@@ -108,8 +107,12 @@ __global__ void mat_mult_cuda(int my_rank, int a_width,int my_work, int *d_a, in
     }
 
     __syncthreads();
-    if (row < my_work && col < a_width)
-      d_c[row * a_width + col] = temp;
+    if (row < my_work && col < a_width) {
+    // if (row < 2 && col < 2) {
+    //   printf("KERNEL [%d,%d] → C[%d][%d] = %d\n",
+    //          blockIdx.y, blockIdx.x, row, col, temp);
+    // }
+      d_c[row * a_width + col] = temp; }
 }
 }
 
@@ -162,7 +165,7 @@ int matrix_multiply_cuda(int nprocs, int my_rank,int n, int my_work,int *h_A,int
 
   by_dim = bx_dim;
   gx_dim = n/bx_dim;
-  gy_dim = n/(bx_dim*nprocs);
+  gy_dim = (my_work + bx_dim -1)/ bx_dim;
 
   dim3 grid(gx_dim,gy_dim);
   dim3 threads(bx_dim,by_dim);
